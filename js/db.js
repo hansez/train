@@ -1,173 +1,139 @@
-// db.js — Local storage data layer
-// All data stored in localStorage under namespaced keys
+// db.js v2 — Full data layer
 
 const DB = (() => {
-  const PREFIX = 'train_';
-
-  const get = (key) => {
-    try {
-      const raw = localStorage.getItem(PREFIX + key);
-      return raw ? JSON.parse(raw) : null;
-    } catch { return null; }
-  };
-
-  const set = (key, value) => {
-    try {
-      localStorage.setItem(PREFIX + key, JSON.stringify(value));
-      return true;
-    } catch { return false; }
-  };
-
-  const remove = (key) => {
-    localStorage.removeItem(PREFIX + key);
-  };
-
-  const keys = () => {
-    return Object.keys(localStorage)
-      .filter(k => k.startsWith(PREFIX))
-      .map(k => k.slice(PREFIX.length));
-  };
-
-  // ---- Programs ----
-  const getPrograms = () => get('programs') || [];
-  const setPrograms = (p) => set('programs', p);
-  const saveProgram = (prog) => {
-    const all = getPrograms();
-    const idx = all.findIndex(p => p.id === prog.id);
-    if (idx >= 0) all[idx] = prog;
-    else all.push(prog);
-    setPrograms(all);
-  };
-  const deleteProgram = (id) => setPrograms(getPrograms().filter(p => p.id !== id));
-  const getProgram = (id) => getPrograms().find(p => p.id === id) || null;
+  const P = 'trainv2_';
+  const get = (k) => { try { const r = localStorage.getItem(P+k); return r ? JSON.parse(r) : null; } catch { return null; } };
+  const set = (k, v) => { try { localStorage.setItem(P+k, JSON.stringify(v)); return true; } catch { return false; } };
+  const remove = (k) => localStorage.removeItem(P+k);
+  const keys = () => Object.keys(localStorage).filter(k=>k.startsWith(P)).map(k=>k.slice(P.length));
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 
   // ---- Exercise Library ----
+  // Exercise types: dynamic_weighted | dynamic_bodyweight | static_weighted | static_bodyweight
+  // effortMetrics: array of 'RIR' | 'SIR' | 'RPE' (at least one required)
+  // category: 'main' | 'accessory' | 'flexibility'
+  // For dynamic_bodyweight / static_bodyweight: progressions = [{id, name}]
+  // For static_bodyweight: progressionMeasure = 'distance' | 'posture', assistanceOptions, resistanceOptions
   const getExercises = () => get('exercises') || [];
-  const setExercises = (e) => set('exercises', e);
-  const saveExercise = (ex) => {
-    const all = getExercises();
-    const idx = all.findIndex(e => e.id === ex.id);
-    if (idx >= 0) all[idx] = ex;
-    else all.push(ex);
-    setExercises(all);
-  };
-  const deleteExercise = (id) => setExercises(getExercises().filter(e => e.id !== id));
-  const getExercise = (id) => getExercises().find(e => e.id === id) || null;
+  const saveExercise = (ex) => { const all=getExercises(); const i=all.findIndex(e=>e.id===ex.id); i>=0?all[i]=ex:all.push(ex); set('exercises',all); };
+  const deleteExercise = (id) => set('exercises', getExercises().filter(e=>e.id!==id));
+  const getExercise = (id) => getExercises().find(e=>e.id===id)||null;
 
-  // ---- Sessions ----
+  // ---- Session Templates ----
+  // Template = { id, name, estimatedDuration (min), groups: [{id, label, exercises:[{exerciseId, targetSetsMin, targetSetsMax, targetRepsMin, targetRepsMax, targetProgressionId, targetSecondsMin, targetSecondsMax, targetRPEMin, targetRPEMax, notes}]}] }
+  const getTemplates = () => get('templates') || [];
+  const saveTemplate = (t) => { const all=getTemplates(); const i=all.findIndex(x=>x.id===t.id); i>=0?all[i]=t:all.push(t); set('templates',all); };
+  const deleteTemplate = (id) => set('templates', getTemplates().filter(t=>t.id!==id));
+  const getTemplate = (id) => getTemplates().find(t=>t.id===id)||null;
+
+  // ---- Scheduled Sessions ----
+  // { id, date (YYYY-MM-DD), time (HH:MM), templateId, templateName, duration (min) }
+  const getScheduled = () => get('scheduled') || [];
+  const saveScheduled = (s) => { const all=getScheduled(); const i=all.findIndex(x=>x.id===s.id); i>=0?all[i]=s:all.push(s); set('scheduled',all); };
+  const deleteScheduled = (id) => set('scheduled', getScheduled().filter(s=>s.id!==id));
+  const getScheduledForDate = (date) => getScheduled().filter(s=>s.date===date);
+
+  // ---- Sessions (logged) ----
   const getSessions = () => get('sessions') || [];
-  const setSessions = (s) => set('sessions', s);
-  const saveSession = (sess) => {
-    const all = getSessions();
-    const idx = all.findIndex(s => s.id === sess.id);
-    if (idx >= 0) all[idx] = sess;
-    else all.push(sess);
-    setSessions(all);
-    return sess;
-  };
-  const deleteSession = (id) => setSessions(getSessions().filter(s => s.id !== id));
-  const getSession = (id) => getSessions().find(s => s.id === id) || null;
-  const getSessionsByDate = (dateStr) => getSessions().filter(s => s.date === dateStr);
-  const getRecentSessions = (n = 10) => {
-    return getSessions()
-      .sort((a,b) => new Date(b.date) - new Date(a.date))
-      .slice(0, n);
-  };
+  const saveSession = (s) => { const all=getSessions(); const i=all.findIndex(x=>x.id===s.id); i>=0?all[i]=s:all.push(s); set('sessions',all); return s; };
+  const deleteSession = (id) => set('sessions', getSessions().filter(s=>s.id!==id));
+  const getSession = (id) => getSessions().find(s=>s.id===id)||null;
+  const getRecentSessions = (n=10) => getSessions().sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,n);
+  const getSessionsForDate = (date) => getSessions().filter(s=>s.date===date);
 
   // ---- Bodyweight ----
   const getBodyweights = () => get('bodyweights') || [];
-  const saveBodyweight = (entry) => {
-    const all = getBodyweights();
-    const idx = all.findIndex(e => e.date === entry.date);
-    if (idx >= 0) all[idx] = entry;
-    else all.push(entry);
-    set('bodyweights', all);
-  };
-  const getBodyweight = (date) => getBodyweights().find(e => e.date === date) || null;
+  const saveBodyweight = (e) => { const all=getBodyweights(); const i=all.findIndex(x=>x.date===e.date); i>=0?all[i]=e:all.push(e); set('bodyweights',all); };
+  const getBodyweight = (date) => getBodyweights().find(e=>e.date===date)||null;
+  const getLatestBodyweight = () => getBodyweights().sort((a,b)=>new Date(b.date)-new Date(a.date))[0]||null;
 
   // ---- Settings ----
-  const getSettings = () => get('settings') || {
-    activeProgram: null,
-    weightUnit: 'lbs',
-  };
+  const getSettings = () => get('settings') || { theme: 'dark', weightUnit: 'lbs' };
   const saveSettings = (s) => set('settings', s);
 
-  // ---- Active Session ----
-  const getActiveSession = () => get('active_session') || null;
-  const setActiveSession = (s) => s ? set('active_session', s) : remove('active_session');
-
-  // ---- Backup / Export ----
-  const exportAll = () => {
-    const data = {};
-    keys().forEach(k => { data[k] = get(k); });
-    return data;
-  };
-  const importAll = (data) => {
-    Object.entries(data).forEach(([k, v]) => set(k, v));
-  };
-
-  // ---- IDs ----
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  // ---- Active Session Draft ----
+  const getActiveSession = () => get('active_session')||null;
+  const setActiveSession = (s) => s ? set('active_session',s) : remove('active_session');
 
   // ---- Analytics ----
   const getPRs = (exerciseId) => {
-    const sessions = getSessions();
-    let maxWeight = 0, maxReps = 0, maxHold = 0, maxVolume = 0;
-    sessions.forEach(sess => {
-      (sess.exercises || []).forEach(ex => {
-        if (ex.exerciseId !== exerciseId) return;
-        let sessVol = 0;
-        (ex.sets || []).forEach(s => {
-          if (s.weight && parseFloat(s.weight) > maxWeight) maxWeight = parseFloat(s.weight);
-          if (s.reps && parseInt(s.reps) > maxReps) maxReps = parseInt(s.reps);
-          if (s.holdDuration && parseFloat(s.holdDuration) > maxHold) maxHold = parseFloat(s.holdDuration);
-          const vol = (parseFloat(s.weight)||0) * (parseInt(s.reps)||1);
-          sessVol += vol;
+    let maxWeight=0, maxReps=0, maxHold=0, maxVol=0;
+    getSessions().forEach(sess => {
+      (sess.groups||[]).forEach(g => {
+        (g.exercises||[]).forEach(ex => {
+          if (ex.exerciseId!==exerciseId) return;
+          let vol=0;
+          (ex.sets||[]).forEach(s => {
+            if (parseFloat(s.weight)>maxWeight) maxWeight=parseFloat(s.weight);
+            if (parseInt(s.reps)>maxReps) maxReps=parseInt(s.reps);
+            if (parseFloat(s.seconds)>maxHold) maxHold=parseFloat(s.seconds);
+            vol+=(parseFloat(s.weight)||0)*(parseInt(s.reps)||1);
+          });
+          if (vol>maxVol) maxVol=vol;
         });
-        if (sessVol > maxVolume) maxVolume = sessVol;
       });
     });
-    return { maxWeight, maxReps, maxHold, maxVolume };
+    return { maxWeight, maxReps, maxHold, maxVol };
   };
 
-  const getVolumeHistory = (exerciseId) => {
+  const getExerciseHistory = (exerciseId, metric='volume') => {
     return getSessions()
-      .filter(s => (s.exercises||[]).some(e => e.exerciseId === exerciseId))
-      .sort((a,b) => new Date(a.date) - new Date(b.date))
+      .filter(s=>(s.groups||[]).some(g=>(g.exercises||[]).some(e=>e.exerciseId===exerciseId)))
+      .sort((a,b)=>new Date(a.date)-new Date(b.date))
       .map(sess => {
-        let vol = 0;
-        (sess.exercises||[]).forEach(ex => {
-          if (ex.exerciseId !== exerciseId) return;
-          (ex.sets||[]).forEach(s => {
-            vol += (parseFloat(s.weight)||0) * (parseInt(s.reps)||1);
+        let val=0;
+        (sess.groups||[]).forEach(g=>{
+          (g.exercises||[]).forEach(ex=>{
+            if (ex.exerciseId!==exerciseId) return;
+            if (metric==='volume') (ex.sets||[]).forEach(s=>{ val+=(parseFloat(s.weight)||0)*(parseInt(s.reps)||1); });
+            else if (metric==='weight') (ex.sets||[]).forEach(s=>{ const w=parseFloat(s.weight)||0; if(w>val)val=w; });
+            else if (metric==='reps') (ex.sets||[]).forEach(s=>{ const r=parseInt(s.reps)||0; if(r>val)val=r; });
+            else if (metric==='seconds') (ex.sets||[]).forEach(s=>{ const sc=parseFloat(s.seconds)||0; if(sc>val)val=sc; });
+            else if (metric==='rpe') { const rpes=(ex.sets||[]).map(s=>parseFloat(s.rpe)||0).filter(v=>v>0); if(rpes.length) val=rpes.reduce((a,b)=>a+b,0)/rpes.length; }
           });
         });
-        return { date: sess.date, volume: vol };
-      });
+        return { date: sess.date, val };
+      }).filter(p=>p.val>0);
   };
 
-  const getSessionVolume = (sessId) => {
-    const sess = getSession(sessId);
-    if (!sess) return 0;
-    let vol = 0;
-    (sess.exercises||[]).forEach(ex => {
-      (ex.sets||[]).forEach(s => {
-        vol += (parseFloat(s.weight)||0) * (parseInt(s.reps)||1);
-      });
-    });
+  const getSessionTotalVolume = (sess) => {
+    let vol=0;
+    (sess.groups||[]).forEach(g=>(g.exercises||[]).forEach(ex=>(ex.sets||[]).forEach(s=>{ vol+=(parseFloat(s.weight)||0)*(parseInt(s.reps)||1); })));
     return vol;
+  };
+
+  // ---- Export / Import ----
+  const exportAll = () => { const d={}; keys().forEach(k=>{d[k]=get(k);}); return d; };
+  const importAll = (data) => Object.entries(data).forEach(([k,v])=>set(k,v));
+
+  // ---- ICS Export ----
+  const exportICS = () => {
+    const scheduled = getScheduled();
+    const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Train//Iron Ledger//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+    scheduled.forEach(s => {
+      const [y,mo,d] = s.date.split('-');
+      const [h,min] = (s.time||'07:00').split(':');
+      const pad = n => String(n).padStart(2,'0');
+      const dtStart = `${y}${pad(mo)}${pad(d)}T${pad(h)}${pad(min)}00`;
+      const endMin = parseInt(min) + (s.duration||60);
+      const endH = parseInt(h) + Math.floor(endMin/60);
+      const dtEnd = `${y}${pad(mo)}${pad(d)}T${pad(endH%24)}${pad(endMin%60)}00`;
+      lines.push('BEGIN:VEVENT',`UID:${s.id}@train`,`DTSTART:${dtStart}`,`DTEND:${dtEnd}`,`SUMMARY:🏋️ ${s.templateName||'Training'}`,`DESCRIPTION:${s.duration||60} min session`,`LOCATION:Gym`,'END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    return lines.join('\r\n');
   };
 
   return {
     get, set, remove, keys, uid,
-    getPrograms, setPrograms, saveProgram, deleteProgram, getProgram,
-    getExercises, setExercises, saveExercise, deleteExercise, getExercise,
-    getSessions, saveSession, deleteSession, getSession,
-    getSessionsByDate, getRecentSessions,
-    getBodyweights, saveBodyweight, getBodyweight,
+    getExercises, saveExercise, deleteExercise, getExercise,
+    getTemplates, saveTemplate, deleteTemplate, getTemplate,
+    getScheduled, saveScheduled, deleteScheduled, getScheduledForDate,
+    getSessions, saveSession, deleteSession, getSession, getRecentSessions, getSessionsForDate,
+    getBodyweights, saveBodyweight, getBodyweight, getLatestBodyweight,
     getSettings, saveSettings,
     getActiveSession, setActiveSession,
-    exportAll, importAll,
-    getPRs, getVolumeHistory, getSessionVolume,
+    getPRs, getExerciseHistory, getSessionTotalVolume,
+    exportAll, importAll, exportICS,
   };
 })();

@@ -1,46 +1,15 @@
-// state.js — App state and navigation
+// state.js v2
 
 const State = (() => {
   let currentView = 'home';
-  let currentModal = null;
-  let sessionDraft = null; // in-progress session
-
+  let sessionDraft = null;
   const listeners = {};
-
-  const on = (event, fn) => {
-    if (!listeners[event]) listeners[event] = [];
-    listeners[event].push(fn);
-  };
-
-  const emit = (event, data) => {
-    (listeners[event] || []).forEach(fn => fn(data));
-  };
-
-  const setView = (view) => {
-    currentView = view;
-    emit('viewChange', view);
-  };
-
+  const on = (e,fn) => { if(!listeners[e])listeners[e]=[]; listeners[e].push(fn); };
+  const emit = (e,d) => (listeners[e]||[]).forEach(fn=>fn(d));
+  const setView = (v) => { currentView=v; emit('viewChange',v); };
   const getView = () => currentView;
-
-  const setSessionDraft = (s) => {
-    sessionDraft = s;
-    DB.setActiveSession(s);
-    emit('sessionChange', s);
-  };
-
-  const getSessionDraft = () => {
-    if (!sessionDraft) {
-      sessionDraft = DB.getActiveSession();
-    }
-    return sessionDraft;
-  };
-
-  const clearSessionDraft = () => {
-    sessionDraft = null;
-    DB.setActiveSession(null);
-    emit('sessionChange', null);
-  };
-
+  const setSessionDraft = (s) => { sessionDraft=s; DB.setActiveSession(s); emit('sessionChange',s); };
+  const getSessionDraft = () => { if(!sessionDraft) sessionDraft=DB.getActiveSession(); return sessionDraft; };
+  const clearSessionDraft = () => { sessionDraft=null; DB.setActiveSession(null); emit('sessionChange',null); };
   return { on, emit, setView, getView, setSessionDraft, getSessionDraft, clearSessionDraft };
 })();
